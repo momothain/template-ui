@@ -1,0 +1,43 @@
+# Dockerfile
+### Basics
+FROM python:3.12.5 
+
+# Set the working directory *in the container* so current working directory = cwd = . = <root>/app
+WORKDIR /app
+
+# Copy the whole code project (e.g. the github repo) into the container's runtime environment. = /app
+COPY . .
+RUN pip install --no-cache-dir -r requirements.txt
+
+
+### Datadog
+# Copy the Datadog serverless-init into your Docker image/app/datadog-init 
+COPY --from=datadog/serverless-init:1 /datadog-init ./datadog-init
+RUN chmod +x /app/datadog-init
+
+## ENV
+ENV DD_SITE=us5.datadoghq.com \
+    DD_SERVICE=<SERVICE> \
+    DD_VERSION=1
+#
+ENV DD_TRACE_ENABLED=true \
+    DD_TRACE_PROPAGATION_STYLE=datadog \
+    DD_LOGS_ENABLED=true \
+    DD_LOGS_INJECTION=true
+# OPTIONAL
+ENV DD_LOG_LEVEL=INFO \
+    DD_TRACE_DEBUG=false \
+    DD_RUNTIME_METRICS_ENABLED=false
+
+
+### SERVICE, configurations specific to your projects
+ENV LOG_WRITE=false
+
+
+### RUN
+EXPOSE 8080
+# entrypoint is for extra pre-work executables. in this case, the datadog executable runs and wraps our Run CMD so it can access and create metadata for the Datadog service online
+ENTRYPOINT ["/app/datadog-init"]
+# you've created your environment! (think terminal cd'd into your preject root')
+# now run the project
+CMD ["ddtrace-run", "gunicorn", "--bind", "0.0.0.0:8080", "--workers", "3", "--worker-class", "uvicorn.workers.UvicornWorker", "--threads", "4", "--timeout", "120", "app:app"]
